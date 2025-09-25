@@ -1,4 +1,4 @@
-# v2.2 - Enhanced with Calculation Reasoning and Red Flag Detection
+# v2.3 - Enhanced with FTE Time Allocation Percentage
 
 import streamlit as st
 import numpy as np
@@ -116,9 +116,9 @@ def check_calculation_health():
     
     # Check if time allocation exceeds 100%
     if alert_fte_percentage > 1.0:
-        issues.append(f"Alert management requires {alert_fte_percentage*100:.1f}% of FTE time (>100%)")
+        issues.append(f"Alert management requires {alert_fte_percentage*100:.1f}% of allocated FTE time (>100%)")
     if incident_fte_percentage > 1.0:
-        issues.append(f"Incident management requires {incident_fte_percentage*100:.1f}% of FTE time (>100%)")
+        issues.append(f"Incident management requires {incident_fte_percentage*100:.1f}% of allocated FTE time (>100%)")
     
     # Check if benefits seem unrealistically high
     total_fte_costs = avg_alert_fte_salary * alert_ftes + avg_incident_fte_salary * incident_ftes
@@ -144,6 +144,8 @@ def detect_calculation_red_flags():
     incident_ftes = st.session_state.get('incident_ftes', 0)
     avg_alert_fte_salary = st.session_state.get('avg_alert_fte_salary', 0)
     avg_incident_fte_salary = st.session_state.get('avg_incident_fte_salary', 0)
+    alert_fte_time_pct = st.session_state.get('alert_fte_time_pct', 100)
+    incident_fte_time_pct = st.session_state.get('incident_fte_time_pct', 100)
     alert_volume = st.session_state.get('alert_volume', 0)
     incident_volume = st.session_state.get('incident_volume', 0)
     avg_alert_triage_time = st.session_state.get('avg_alert_triage_time', 0)
@@ -156,17 +158,16 @@ def detect_calculation_red_flags():
         reasoning_text = f"""Your calculated cost per alert is {currency_symbol}{cost_per_alert:.2f}, which seems very high.
 
 **How this is calculated:**
-- Total FTE time on alerts: {alert_volume * avg_alert_triage_time / 60:,.0f} hours/year
-- Total FTE capacity: {alert_ftes * working_hours_per_fte_per_year:,.0f} hours/year
-- FTE utilization on alerts: {alert_fte_percentage*100:.1f}%
 - Annual FTE cost for alerts: {currency_symbol}{alert_ftes * avg_alert_fte_salary:,.0f}
-- Cost allocated to alerts: {currency_symbol}{alert_ftes * avg_alert_fte_salary * alert_fte_percentage:,.0f}
+- % of time on alerts (your input): {alert_fte_time_pct}%
+- Cost allocated to alerts: {currency_symbol}{alert_ftes * avg_alert_fte_salary * (alert_fte_time_pct / 100.0):,.0f}
+- Cost per alert: Allocated Cost / Alert Volume
 
 **Likely issues:**
-- Alert triage time ({avg_alert_triage_time} minutes) may be too high
-- Number of FTEs ({alert_ftes}) may be too high for the alert volume
+- % of FTE Time on Alerts ({alert_fte_time_pct}%) may be too high for the volume
+- Number of FTEs ({alert_ftes}) may be too high
 - FTE salaries ({currency_symbol}{avg_alert_fte_salary:,.0f}) may be inflated
-- Alert volume ({alert_volume:,}) may be too low
+- Alert volume ({alert_volume:,}) may be too low for the allocated cost
 
 **Industry benchmarks:** Alert costs typically range from {currency_symbol}0.50 to {currency_symbol}15.00"""
         
@@ -181,17 +182,16 @@ def detect_calculation_red_flags():
         reasoning_text = f"""Your calculated cost per incident is {currency_symbol}{cost_per_incident:.2f}, which seems very high.
 
 **How this is calculated:**
-- Total FTE time on incidents: {incident_volume * avg_incident_triage_time / 60:,.0f} hours/year
-- Total FTE capacity: {incident_ftes * working_hours_per_fte_per_year:,.0f} hours/year
-- FTE utilization on incidents: {incident_fte_percentage*100:.1f}%
 - Annual FTE cost for incidents: {currency_symbol}{incident_ftes * avg_incident_fte_salary:,.0f}
-- Cost allocated to incidents: {currency_symbol}{incident_ftes * avg_incident_fte_salary * incident_fte_percentage:,.0f}
+- % of time on incidents (your input): {incident_fte_time_pct}%
+- Cost allocated to incidents: {currency_symbol}{incident_ftes * avg_incident_fte_salary * (incident_fte_time_pct / 100.0):,.0f}
+- Cost per incident: Allocated Cost / Incident Volume
 
 **Likely issues:**
-- Incident triage time ({avg_incident_triage_time} minutes) may be too high
-- Number of FTEs ({incident_ftes}) may be too high for the incident volume
+- % of FTE Time on Incidents ({incident_fte_time_pct}%) may be too high for the volume
+- Number of FTEs ({incident_ftes}) may be too high
 - FTE salaries ({currency_symbol}{avg_incident_fte_salary:,.0f}) may be inflated
-- Incident volume ({incident_volume:,}) may be too low
+- Incident volume ({incident_volume:,}) may be too low for the allocated cost
 
 **Industry benchmarks:** Incident costs typically range from {currency_symbol}5.00 to {currency_symbol}200.00"""
         
@@ -204,45 +204,43 @@ def detect_calculation_red_flags():
     
     # Red Flag 2: FTE utilization over 100%
     if alert_fte_percentage > 1.0:
-        reasoning_text = f"""Your alert management requires {alert_fte_percentage*100:.1f}% of available FTE time, which is impossible.
+        reasoning_text = f"""Your alert workload requires more time than you've allocated.
 
-**The math breakdown:**
-- Total alert time needed: {alert_volume:,} alerts × {avg_alert_triage_time} minutes = {alert_volume * avg_alert_triage_time:,.0f} minutes/year
-- Convert to hours: {alert_volume * avg_alert_triage_time / 60:,.0f} hours/year
-- Available FTE hours: {alert_ftes} FTEs × {working_hours_per_fte_per_year:,.0f} hours = {alert_ftes * working_hours_per_fte_per_year:,.0f} hours/year
-- Utilization: {alert_volume * avg_alert_triage_time / 60:,.0f} ÷ {alert_ftes * working_hours_per_fte_per_year:,.0f} = {alert_fte_percentage*100:.1f}%
+**The Math Breakdown:**
+- **Time Needed for Workload:** {alert_volume:,} alerts × {avg_alert_triage_time} mins/alert = {alert_volume * avg_alert_triage_time / 60:,.0f} hours/year
+- **FTE Time Allocated to Alerts:** {alert_ftes} FTEs × {working_hours_per_fte_per_year:,.0f} hours/FTE × {alert_fte_time_pct}% = **{(alert_ftes * working_hours_per_fte_per_year * alert_fte_time_pct / 100.0):,.0f} hours/year**
+- **Utilization of Allocated Time:** {alert_volume * avg_alert_triage_time / 60:,.0f} hours ÷ {(alert_ftes * working_hours_per_fte_per_year * alert_fte_time_pct / 100.0):,.0f} hours = **{alert_fte_percentage*100:.1f}%**
 
 **To fix this, you need to:**
+- Increase the **% of FTE Time on Alerts** (currently {alert_fte_time_pct}%)
 - Increase the number of FTEs managing alerts (currently {alert_ftes})
 - Reduce the average triage time per alert (currently {avg_alert_triage_time} minutes)
-- Reduce the alert volume (currently {alert_volume:,})
-- Increase working hours per FTE (currently {working_hours_per_fte_per_year:,.0f})"""
+- Reduce the alert volume (currently {alert_volume:,})"""
         
         red_flags.append({
             'type': 'Over-allocated Alert FTEs',
-            'value': f"{alert_fte_percentage*100:.1f}%",
+            'value': f"{alert_fte_percentage*100:.1f}% Utilization of Allocated Time",
             'reasoning': reasoning_text,
             'severity': 'critical'
         })
     
     if incident_fte_percentage > 1.0:
-        reasoning_text = f"""Your incident management requires {incident_fte_percentage*100:.1f}% of available FTE time, which is impossible.
+        reasoning_text = f"""Your incident workload requires more time than you've allocated.
 
-**The math breakdown:**
-- Total incident time needed: {incident_volume:,} incidents × {avg_incident_triage_time} minutes = {incident_volume * avg_incident_triage_time:,.0f} minutes/year
-- Convert to hours: {incident_volume * avg_incident_triage_time / 60:,.0f} hours/year
-- Available FTE hours: {incident_ftes} FTEs × {working_hours_per_fte_per_year:,.0f} hours = {incident_ftes * working_hours_per_fte_per_year:,.0f} hours/year
-- Utilization: {incident_volume * avg_incident_triage_time / 60:,.0f} ÷ {incident_ftes * working_hours_per_fte_per_year:,.0f} = {incident_fte_percentage*100:.1f}%
+**The Math Breakdown:**
+- **Time Needed for Workload:** {incident_volume:,} incidents × {avg_incident_triage_time} mins/incident = {incident_volume * avg_incident_triage_time / 60:,.0f} hours/year
+- **FTE Time Allocated to Incidents:** {incident_ftes} FTEs × {working_hours_per_fte_per_year:,.0f} hours/FTE × {incident_fte_time_pct}% = **{(incident_ftes * working_hours_per_fte_per_year * incident_fte_time_pct / 100.0):,.0f} hours/year**
+- **Utilization of Allocated Time:** {incident_volume * avg_incident_triage_time / 60:,.0f} hours ÷ {(incident_ftes * working_hours_per_fte_per_year * incident_fte_time_pct / 100.0):,.0f} hours = **{incident_fte_percentage*100:.1f}%**
 
 **To fix this, you need to:**
+- Increase the **% of FTE Time on Incidents** (currently {incident_fte_time_pct}%)
 - Increase the number of FTEs managing incidents (currently {incident_ftes})
 - Reduce the average triage time per incident (currently {avg_incident_triage_time} minutes)
-- Reduce the incident volume (currently {incident_volume:,})
-- Increase working hours per FTE (currently {working_hours_per_fte_per_year:,.0f})"""
-        
+- Reduce the incident volume (currently {incident_volume:,})"""
+
         red_flags.append({
             'type': 'Over-allocated Incident FTEs',
-            'value': f"{incident_fte_percentage*100:.1f}%",
+            'value': f"{incident_fte_percentage*100:.1f}% Utilization of Allocated Time",
             'reasoning': reasoning_text,
             'severity': 'critical'
         })
@@ -276,14 +274,13 @@ def detect_calculation_red_flags():
     
     # Red Flag 4: Extremely low FTE utilization
     if alert_fte_percentage > 0 and alert_fte_percentage < 0.1:
-        reasoning_text = f"""Your alert management FTEs are only {alert_fte_percentage*100:.1f}% utilized on alerts.
+        reasoning_text = f"""Your alert workload only uses {alert_fte_percentage*100:.1f}% of the FTE time you've allocated for alerts.
 
 **This suggests:**
-- You may have too many FTEs assigned to alert management
-- Your alert triage time may be underestimated
-- Your alert volume may be underestimated
+- You may have allocated too much FTE time for this task
+- Your alert triage time or volume may be underestimated
 
-**Consider:** Are these FTEs doing other work beyond alert triage?"""
+**Consider:** Is the **% of FTE Time on Alerts** input accurate?"""
         
         warnings.append({
             'type': 'Very Low Alert FTE Utilization',
@@ -293,14 +290,13 @@ def detect_calculation_red_flags():
         })
     
     if incident_fte_percentage > 0 and incident_fte_percentage < 0.1:
-        reasoning_text = f"""Your incident management FTEs are only {incident_fte_percentage*100:.1f}% utilized on incidents.
+        reasoning_text = f"""Your incident workload only uses {incident_fte_percentage*100:.1f}% of the FTE time you've allocated for incidents.
 
 **This suggests:**
-- You may have too many FTEs assigned to incident management
-- Your incident triage time may be underestimated
-- Your incident volume may be underestimated
+- You may have allocated too much FTE time for this task
+- Your incident triage time or volume may be underestimated
 
-**Consider:** Are these FTEs doing other work beyond incident triage?"""
+**Consider:** Is the **% of FTE Time on Incidents** input accurate?"""
         
         warnings.append({
             'type': 'Very Low Incident FTE Utilization',
@@ -397,6 +393,8 @@ def show_detailed_calculation_breakdown():
     incident_volume = st.session_state.get('incident_volume', 0)
     alert_ftes = st.session_state.get('alert_ftes', 0)
     incident_ftes = st.session_state.get('incident_ftes', 0)
+    alert_fte_time_pct = st.session_state.get('alert_fte_time_pct', 100)
+    incident_fte_time_pct = st.session_state.get('incident_fte_time_pct', 100)
     avg_alert_triage_time = st.session_state.get('avg_alert_triage_time', 0)
     avg_incident_triage_time = st.session_state.get('avg_incident_triage_time', 0)
     avg_alert_fte_salary = st.session_state.get('avg_alert_fte_salary', 0)
@@ -411,26 +409,24 @@ def show_detailed_calculation_breakdown():
     with col1:
         st.markdown("#### 🚨 Alert Cost Calculation")
         if alert_volume > 0 and alert_ftes > 0:
-            total_alert_time_minutes = alert_volume * avg_alert_triage_time
-            total_alert_time_hours = total_alert_time_minutes / 60
-            total_available_fte_hours = alert_ftes * working_hours_per_fte_per_year
+            total_alert_time_hours = (alert_volume * avg_alert_triage_time) / 60
+            allocated_fte_hours = alert_ftes * working_hours_per_fte_per_year * (alert_fte_time_pct / 100)
             total_fte_cost = alert_ftes * avg_alert_fte_salary
-            cost_for_alerts = total_fte_cost * alert_fte_percentage
+            cost_for_alerts = total_fte_cost * (alert_fte_time_pct / 100)
             
             st.markdown(f"""
-**Step 1: Calculate total time needed**
-- {alert_volume:,} alerts × {avg_alert_triage_time} minutes = {total_alert_time_minutes:,.0f} minutes/year
-- Convert to hours: {total_alert_time_hours:,.0f} hours/year
+**Step 1: Calculate total time needed for workload**
+- {alert_volume:,} alerts × {avg_alert_triage_time} mins = {total_alert_time_hours:,.0f} hours/year
 
-**Step 2: Calculate available FTE capacity**
-- {alert_ftes} FTEs × {working_hours_per_fte_per_year:,.0f} hours = {total_available_fte_hours:,.0f} hours/year
+**Step 2: Calculate FTE capacity allocated to alerts**
+- {alert_ftes} FTEs × {working_hours_per_fte_per_year:,.0f} hours × {alert_fte_time_pct}% = {allocated_fte_hours:,.0f} hours/year
 
-**Step 3: Calculate utilization**
-- {total_alert_time_hours:,.0f} ÷ {total_available_fte_hours:,.0f} = {alert_fte_percentage:.1%}
+**Step 3: Calculate utilization (of allocated time)**
+- {total_alert_time_hours:,.0f} ÷ {allocated_fte_hours:,.0f} = {alert_fte_percentage:.1%}
 
-**Step 4: Calculate cost allocation**
+**Step 4: Calculate cost allocation (based on your input)**
 - Total FTE cost: {alert_ftes} × {currency_symbol}{avg_alert_fte_salary:,.0f} = {currency_symbol}{total_fte_cost:,.0f}
-- Cost for alerts: {currency_symbol}{total_fte_cost:,.0f} × {alert_fte_percentage:.1%} = {currency_symbol}{cost_for_alerts:,.0f}
+- Cost for alerts: {currency_symbol}{total_fte_cost:,.0f} × {alert_fte_time_pct}% = {currency_symbol}{cost_for_alerts:,.0f}
 
 **Step 5: Cost per alert**
 - {currency_symbol}{cost_for_alerts:,.0f} ÷ {alert_volume:,} = **{currency_symbol}{cost_per_alert:.2f}**
@@ -441,26 +437,24 @@ def show_detailed_calculation_breakdown():
     with col2:
         st.markdown("#### 🔧 Incident Cost Calculation")
         if incident_volume > 0 and incident_ftes > 0:
-            total_incident_time_minutes = incident_volume * avg_incident_triage_time
-            total_incident_time_hours = total_incident_time_minutes / 60
-            total_available_fte_hours = incident_ftes * working_hours_per_fte_per_year
+            total_incident_time_hours = (incident_volume * avg_incident_triage_time) / 60
+            allocated_fte_hours = incident_ftes * working_hours_per_fte_per_year * (incident_fte_time_pct / 100)
             total_fte_cost = incident_ftes * avg_incident_fte_salary
-            cost_for_incidents = total_fte_cost * incident_fte_percentage
+            cost_for_incidents = total_fte_cost * (incident_fte_time_pct / 100)
             
             st.markdown(f"""
-**Step 1: Calculate total time needed**
-- {incident_volume:,} incidents × {avg_incident_triage_time} minutes = {total_incident_time_minutes:,.0f} minutes/year
-- Convert to hours: {total_incident_time_hours:,.0f} hours/year
+**Step 1: Calculate total time needed for workload**
+- {incident_volume:,} incidents × {avg_incident_triage_time} mins = {total_incident_time_hours:,.0f} hours/year
 
-**Step 2: Calculate available FTE capacity**
-- {incident_ftes} FTEs × {working_hours_per_fte_per_year:,.0f} hours = {total_available_fte_hours:,.0f} hours/year
+**Step 2: Calculate FTE capacity allocated to incidents**
+- {incident_ftes} FTEs × {working_hours_per_fte_per_year:,.0f} hours × {incident_fte_time_pct}% = {allocated_fte_hours:,.0f} hours/year
 
-**Step 3: Calculate utilization**
-- {total_incident_time_hours:,.0f} ÷ {total_available_fte_hours:,.0f} = {incident_fte_percentage:.1%}
+**Step 3: Calculate utilization (of allocated time)**
+- {total_incident_time_hours:,.0f} ÷ {allocated_fte_hours:,.0f} = {incident_fte_percentage:.1%}
 
-**Step 4: Calculate cost allocation**
+**Step 4: Calculate cost allocation (based on your input)**
 - Total FTE cost: {incident_ftes} × {currency_symbol}{avg_incident_fte_salary:,.0f} = {currency_symbol}{total_fte_cost:,.0f}
-- Cost for incidents: {currency_symbol}{total_fte_cost:,.0f} × {incident_fte_percentage:.1%} = {currency_symbol}{cost_for_incidents:,.0f}
+- Cost for incidents: {currency_symbol}{total_fte_cost:,.0f} × {incident_fte_time_pct}% = {currency_symbol}{cost_for_incidents:,.0f}
 
 **Step 5: Cost per incident**
 - {currency_symbol}{cost_for_incidents:,.0f} ÷ {incident_volume:,} = **{currency_symbol}{cost_per_incident:.2f}**
@@ -500,16 +494,16 @@ def show_data_quality_score(red_flags, warnings):
         recommendations = []
         
         if any(f['type'] in ['Over-allocated Alert FTEs', 'Over-allocated Incident FTEs'] for f in red_flags):
-            recommendations.append("• **Fix FTE over-allocation**: Increase FTE count or reduce volume/time estimates")
+            recommendations.append("• **Fix FTE over-allocation**: Increase FTE count or the '% of FTE Time' dedicated to the task")
         
         if any(f['type'] in ['High Cost Per Alert', 'High Cost Per Incident'] for f in red_flags):
-            recommendations.append("• **Review cost calculations**: Check if triage times, FTE counts, or salaries are realistic")
+            recommendations.append("• **Review cost calculations**: Check if '% of FTE Time', FTE counts, or salaries are realistic for the given volume")
         
         if any(f['type'] == 'Disproportionately High Benefits' for f in red_flags):
             recommendations.append("• **Validate benefit assumptions**: Ensure improvement percentages and additional benefits are conservative")
         
         if any(w['type'] in ['Very Low Alert FTE Utilization', 'Very Low Incident FTE Utilization'] for w in warnings):
-            recommendations.append("• **Clarify FTE responsibilities**: Ensure FTE counts reflect only time spent on alerts/incidents")
+            recommendations.append("• **Check FTE time allocation**: The workload is much lower than the time allocated; review the '% of FTE Time' input")
         
         for rec in recommendations:
             st.markdown(rec)
@@ -528,28 +522,25 @@ def show_enhanced_validation_section():
             if any(f['type'] in ['Over-allocated Alert FTEs', 'Over-allocated Incident FTEs'] for f in red_flags):
                 st.markdown("""
 **For FTE over-allocation issues:**
-1. Double-check your volume numbers (are you counting unique alerts/incidents?)
-2. Verify triage time estimates (include only direct triage, not full resolution)
-3. Ensure FTE count reflects dedicated personnel
-4. Consider if some work is automated or handled by different teams
+1. Increase the **% of FTE time** dedicated to the task.
+2. Increase the number of FTEs assigned.
+3. Verify triage time and volume estimates are correct.
                 """)
             
             if any(f['type'] in ['High Cost Per Alert', 'High Cost Per Incident'] for f in red_flags):
                 st.markdown("""
 **For high cost per alert/incident:**
-1. Verify your alert/incident definitions match industry standards
-2. Check if triage time includes only initial triage, not full resolution
-3. Confirm FTE salaries include only base salary + benefits
-4. Ensure volumes are annual figures, not monthly/quarterly
+1. Check if the **% of FTE time** is realistic for the given volume.
+2. Confirm FTE salaries include only base salary + benefits.
+3. Ensure volumes are annual figures, not monthly/quarterly.
                 """)
             
             if any(f['type'] == 'Disproportionately High Benefits' for f in red_flags):
                 st.markdown("""
 **For overly optimistic benefits:**
-1. Use conservative improvement percentages (20-40% rather than 60-80%)
-2. Avoid double-counting benefits across categories
-3. Validate additional benefits with concrete business cases
-4. Consider phased implementation with gradual benefit realization
+1. Use conservative improvement percentages (20-40% rather than 60-80%).
+2. Avoid double-counting benefits across categories.
+3. Validate additional benefits with concrete business cases.
                 """)
 
 # --- MONTE CARLO SIMULATION FUNCTIONS ---
@@ -889,11 +880,11 @@ def get_all_input_values():
         'hours_per_day', 'days_per_week', 'weeks_per_year', 'holiday_sick_days',
         
         # Alert Management
-        'alert_volume', 'alert_ftes', 'avg_alert_triage_time', 'avg_alert_fte_salary',
+        'alert_volume', 'alert_ftes', 'alert_fte_time_pct', 'avg_alert_triage_time', 'avg_alert_fte_salary',
         'alert_reduction_pct', 'alert_triage_time_saved_pct',
         
         # Incident Management
-        'incident_volume', 'incident_ftes', 'avg_incident_triage_time', 'avg_incident_fte_salary',
+        'incident_volume', 'incident_ftes', 'incident_fte_time_pct', 'avg_incident_triage_time', 'avg_incident_fte_salary',
         'incident_reduction_pct', 'incident_triage_time_savings_pct',
         
         # Major Incidents
@@ -901,7 +892,7 @@ def get_all_input_values():
         
         # Asset Discovery (no CMDB)
         'asset_volume', 'manual_discovery_cycles_per_year', 'hours_per_discovery_cycle',
-        'asset_management_ftes', 'avg_asset_mgmt_fte_salary', 'asset_discovery_automation_pct',
+        'asset_management_ftes', 'asset_mgmt_fte_time_pct', 'avg_asset_mgmt_fte_salary', 'asset_discovery_automation_pct',
         
         # Additional Benefits
         'tool_savings', 'people_efficiency', 'fte_avoidance', 'sla_penalty', 
@@ -939,12 +930,14 @@ def get_default_value(key):
         'holiday_sick_days': 25,
         'alert_volume': 0,
         'alert_ftes': 0,
+        'alert_fte_time_pct': 100,
         'avg_alert_triage_time': 0,
         'avg_alert_fte_salary': 0,
         'alert_reduction_pct': 0,
         'alert_triage_time_saved_pct': 0,
         'incident_volume': 0,
         'incident_ftes': 0,
+        'incident_fte_time_pct': 100,
         'avg_incident_triage_time': 0,
         'avg_incident_fte_salary': 0,
         'incident_reduction_pct': 0,
@@ -958,6 +951,7 @@ def get_default_value(key):
         'manual_discovery_cycles_per_year': 0,
         'hours_per_discovery_cycle': 0,
         'asset_management_ftes': 0,
+        'asset_mgmt_fte_time_pct': 100,
         'avg_asset_mgmt_fte_salary': 0,
         'asset_discovery_automation_pct': 0,
         'tool_savings': 0,
@@ -984,7 +978,7 @@ def export_to_csv(input_values):
     
     # Define parameter descriptions for better readability (removed compliance descriptions)
     descriptions = {
-        'solution_name': 'Solution Name',
+        'solution_name': 'Customer Name',
         'industry_template': 'Industry Template',
         'currency': 'Currency Symbol',
         'implementation_delay': 'Implementation Delay (months)',
@@ -996,12 +990,14 @@ def export_to_csv(input_values):
         'holiday_sick_days': 'Holiday + Sick Days per Year',
         'alert_volume': 'Total Infrastructure Related Alerts per Year',
         'alert_ftes': 'Total FTEs Managing Infrastructure Alerts',
+        'alert_fte_time_pct': '% of FTE Time on Alerts',
         'avg_alert_triage_time': 'Average Alert Triage Time (minutes)',
         'avg_alert_fte_salary': 'Average Annual Salary per Alert Management FTE',
         'alert_reduction_pct': '% Alert Reduction',
         'alert_triage_time_saved_pct': '% Alert Triage Time Reduction',
         'incident_volume': 'Total Infrastructure Related Incident Volumes per Year',
         'incident_ftes': 'Total FTEs Managing Infrastructure Incidents',
+        'incident_fte_time_pct': '% of FTE Time on Incidents',
         'avg_incident_triage_time': 'Average Incident Triage Time (minutes)',
         'avg_incident_fte_salary': 'Average Annual Salary per Incident Management FTE',
         'incident_reduction_pct': '% Incident Reduction',
@@ -1015,6 +1011,7 @@ def export_to_csv(input_values):
         'manual_discovery_cycles_per_year': 'Manual Discovery Cycles per Year',
         'hours_per_discovery_cycle': 'Hours per Manual Discovery Cycle',
         'asset_management_ftes': 'Total FTEs Managing IT Assets',
+        'asset_mgmt_fte_time_pct': '% of FTE Time on Asset Discovery',
         'avg_asset_mgmt_fte_salary': 'Average Annual Salary per Asset Management FTE',
         'asset_discovery_automation_pct': '% Asset Discovery Process Automated',
         'tool_savings': 'Tool Consolidation Savings',
@@ -1076,7 +1073,7 @@ def export_to_json(input_values):
     export_data = {
         'metadata': {
             'export_date': datetime.now().isoformat(),
-            'version': '2.2',
+            'version': '2.3',
             'tool': 'Enhanced BVA Business Value Assessment with Calculation Reasoning'
         },
         'configuration': input_values
@@ -1372,7 +1369,7 @@ def generate_executive_pdf_report(logo_file=None):
         elements.append(Spacer(1, 20))
         
         # Footer
-        footer_text = f"Report generated on {datetime.now().strftime('%B %d, %Y')} using Enhanced Business Value Assessment Tool v2.2"
+        footer_text = f"Report generated on {datetime.now().strftime('%B %d, %Y')} using Enhanced Business Value Assessment Tool v2.3"
         footer_style = ParagraphStyle(
             'Footer',
             parent=styles['Normal'],
@@ -1396,71 +1393,95 @@ def generate_executive_pdf_report(logo_file=None):
 # --- CALCULATION FUNCTIONS ---
 
 def calculate_alert_costs(alert_volume, alert_ftes, avg_alert_triage_time, avg_salary_per_year, 
-                         hours_per_day, days_per_week, weeks_per_year, holiday_sick_days):
+                         hours_per_day, days_per_week, weeks_per_year, holiday_sick_days,
+                         alert_fte_time_pct):
     """Calculate the true cost per alert based on FTE time allocation"""
     if alert_volume == 0 or alert_ftes == 0:
         return 0, 0, 0, 0
     
+    # Calculate total time required by the workload
     total_alert_time_minutes_per_year = alert_volume * avg_alert_triage_time
     total_alert_time_hours_per_year = total_alert_time_minutes_per_year / 60
     
+    # Calculate total available hours from the FTE pool
     total_working_days = (weeks_per_year * days_per_week) - holiday_sick_days
     working_hours_per_fte_per_year = total_working_days * hours_per_day
     total_available_fte_hours = alert_ftes * working_hours_per_fte_per_year
     
-    fte_time_percentage_on_alerts = total_alert_time_hours_per_year / total_available_fte_hours if total_available_fte_hours > 0 else 0
+    # 1. Calculate the portion of FTE hours ALLOCATED to alerts
+    total_allocated_fte_hours = total_available_fte_hours * (alert_fte_time_pct / 100.0)
+
+    # 2. Calculate utilization WITHIN the allocated time (for validation)
+    utilization_of_allocated_time = total_alert_time_hours_per_year / total_allocated_fte_hours if total_allocated_fte_hours > 0 else 0
     
+    # 3. Calculate cost based on the user-defined percentage
     total_fte_cost = alert_ftes * avg_salary_per_year
-    total_alert_handling_cost = total_fte_cost * fte_time_percentage_on_alerts
+    total_alert_handling_cost = total_fte_cost * (alert_fte_time_pct / 100.0)
+    
     cost_per_alert = total_alert_handling_cost / alert_volume if alert_volume > 0 else 0
     
-    return cost_per_alert, total_alert_handling_cost, fte_time_percentage_on_alerts, working_hours_per_fte_per_year
+    # Return the new utilization metric for the red flag system
+    return cost_per_alert, total_alert_handling_cost, utilization_of_allocated_time, working_hours_per_fte_per_year
 
 def calculate_incident_costs(incident_volume, incident_ftes, avg_incident_triage_time, avg_salary_per_year,
-                           hours_per_day, days_per_week, weeks_per_year, holiday_sick_days):
+                           hours_per_day, days_per_week, weeks_per_year, holiday_sick_days,
+                           incident_fte_time_pct):
     """Calculate the true cost per incident based on FTE time allocation"""
     if incident_volume == 0 or incident_ftes == 0:
         return 0, 0, 0, 0
     
+    # Calculate total time required by the workload
     total_incident_time_minutes_per_year = incident_volume * avg_incident_triage_time
     total_incident_time_hours_per_year = total_incident_time_minutes_per_year / 60
     
+    # Calculate total available hours from the FTE pool
     total_working_days = (weeks_per_year * days_per_week) - holiday_sick_days
     working_hours_per_fte_per_year = total_working_days * hours_per_day
     total_available_fte_hours = incident_ftes * working_hours_per_fte_per_year
     
-    fte_time_percentage_on_incidents = total_incident_time_hours_per_year / total_available_fte_hours if total_available_fte_hours > 0 else 0
+    # 1. Calculate allocated hours
+    total_allocated_fte_hours = total_available_fte_hours * (incident_fte_time_pct / 100.0)
+
+    # 2. Calculate utilization within allocated time
+    utilization_of_allocated_time = total_incident_time_hours_per_year / total_allocated_fte_hours if total_allocated_fte_hours > 0 else 0
     
+    # 3. Calculate cost based on user-defined percentage
     total_fte_cost = incident_ftes * avg_salary_per_year
-    total_incident_handling_cost = total_fte_cost * fte_time_percentage_on_incidents
+    total_incident_handling_cost = total_fte_cost * (incident_fte_time_pct / 100.0)
+    
     cost_per_incident = total_incident_handling_cost / incident_volume if incident_volume > 0 else 0
     
-    return cost_per_incident, total_incident_handling_cost, fte_time_percentage_on_incidents, working_hours_per_fte_per_year
+    return cost_per_incident, total_incident_handling_cost, utilization_of_allocated_time, working_hours_per_fte_per_year
 
 def calculate_asset_discovery_costs(asset_volume, manual_discovery_cycles_per_year, hours_per_discovery_cycle, 
                                    asset_management_ftes, avg_asset_mgmt_fte_salary,
-                                   hours_per_day, days_per_week, weeks_per_year, holiday_sick_days):
+                                   hours_per_day, days_per_week, weeks_per_year, holiday_sick_days,
+                                   asset_mgmt_fte_time_pct):
     """Calculate the cost of manual asset discovery processes"""
     if asset_volume == 0 or asset_management_ftes == 0:
         return 0, 0, 0, 0
     
-    # Calculate total manual discovery time per year
+    # Calculate total time required by the workload
     total_discovery_hours_per_year = manual_discovery_cycles_per_year * hours_per_discovery_cycle
     
-    # Calculate available FTE hours (same pattern as your existing functions)
+    # Calculate total available hours from the FTE pool
     total_working_days = (weeks_per_year * days_per_week) - holiday_sick_days
     working_hours_per_fte_per_year = total_working_days * hours_per_day
     total_available_fte_hours = asset_management_ftes * working_hours_per_fte_per_year
     
-    # Calculate percentage of FTE time spent on asset discovery
-    fte_time_percentage_on_discovery = total_discovery_hours_per_year / total_available_fte_hours if total_available_fte_hours > 0 else 0
+    # 1. Calculate allocated hours
+    total_allocated_fte_hours = total_available_fte_hours * (asset_mgmt_fte_time_pct / 100.0)
+
+    # 2. Calculate utilization within allocated time
+    utilization_of_allocated_time = total_discovery_hours_per_year / total_allocated_fte_hours if total_allocated_fte_hours > 0 else 0
     
-    # Calculate costs
+    # 3. Calculate cost based on user-defined percentage
     total_fte_cost = asset_management_ftes * avg_asset_mgmt_fte_salary
-    total_discovery_cost = total_fte_cost * fte_time_percentage_on_discovery
+    total_discovery_cost = total_fte_cost * (asset_mgmt_fte_time_pct / 100.0)
+    
     cost_per_discovery_cycle = total_discovery_cost / manual_discovery_cycles_per_year if manual_discovery_cycles_per_year > 0 else 0
     
-    return cost_per_discovery_cycle, total_discovery_cost, fte_time_percentage_on_discovery, working_hours_per_fte_per_year
+    return cost_per_discovery_cycle, total_discovery_cost, utilization_of_allocated_time, working_hours_per_fte_per_year
 
 def calculate_benefit_realization_factor(month, implementation_delay_months, ramp_up_months):
     """Calculate what percentage of benefits are realized in a given month"""
@@ -2066,7 +2087,7 @@ st.sidebar.markdown("---")
 st.sidebar.header("Customize Your Financial Impact Model Inputs")
 
 # Solution Name Input
-solution_name = st.sidebar.text_input("Solution Name", value="AIOPs", key="solution_name")
+solution_name = st.sidebar.text_input("Customer Name", value="ACME", key="solution_name")
 
 # --- Implementation Timeline ---
 st.sidebar.subheader("📅 Implementation Timeline")
@@ -2230,6 +2251,11 @@ alert_ftes = st.sidebar.number_input(
     value=0,
     key="alert_ftes"
 )
+alert_fte_time_pct = st.sidebar.slider(
+    "% of FTE Time on Alerts", 0, 100, 100,
+    help="The percentage of time the above FTEs dedicate specifically to managing these alerts.",
+    key="alert_fte_time_pct"
+)
 avg_alert_triage_time = st.sidebar.number_input(
     "Average Alert Triage Time (minutes)", 
     value=template.get("avg_alert_triage_time", 0),
@@ -2263,6 +2289,11 @@ incident_ftes = st.sidebar.number_input(
     "Total FTEs Managing Infrastructure Incidents", 
     value=0,
     key="incident_ftes"
+)
+incident_fte_time_pct = st.sidebar.slider(
+    "% of FTE Time on Incidents", 0, 100, 100,
+    help="The percentage of time the above FTEs dedicate specifically to managing these incidents.",
+    key="incident_fte_time_pct"
 )
 avg_incident_triage_time = st.sidebar.number_input(
     "Average Incident Triage Time (minutes)", 
@@ -2338,6 +2369,11 @@ asset_management_ftes = st.sidebar.number_input(
     value=0,
     key="asset_management_ftes",
     help="FTEs involved in asset discovery"
+)
+asset_mgmt_fte_time_pct = st.sidebar.slider(
+    "% of FTE Time on Asset Discovery", 0, 100, 100,
+    help="The percentage of time the above FTEs dedicate to manual asset discovery.",
+    key="asset_mgmt_fte_time_pct"
 )
 avg_asset_mgmt_fte_salary = st.sidebar.number_input(
     "Average Annual Salary per Asset Management FTE", 
@@ -2439,19 +2475,22 @@ if not errors and not warnings:
 # Calculate alert and incident costs
 cost_per_alert, total_alert_handling_cost, alert_fte_percentage, alert_working_hours = calculate_alert_costs(
     alert_volume, alert_ftes, avg_alert_triage_time, avg_alert_fte_salary,
-    hours_per_day, days_per_week, weeks_per_year, holiday_sick_days
+    hours_per_day, days_per_week, weeks_per_year, holiday_sick_days,
+    alert_fte_time_pct
 )
 
 cost_per_incident, total_incident_handling_cost, incident_fte_percentage, incident_working_hours = calculate_incident_costs(
     incident_volume, incident_ftes, avg_incident_triage_time, avg_incident_fte_salary,
-    hours_per_day, days_per_week, weeks_per_year, holiday_sick_days
+    hours_per_day, days_per_week, weeks_per_year, holiday_sick_days,
+    incident_fte_time_pct
 )
 
 # Calculate asset discovery costs and savings
 cost_per_discovery_cycle, total_discovery_cost, discovery_fte_percentage, discovery_working_hours = calculate_asset_discovery_costs(
     asset_volume, manual_discovery_cycles_per_year, hours_per_discovery_cycle, 
     asset_management_ftes, avg_asset_mgmt_fte_salary,
-    hours_per_day, days_per_week, weeks_per_year, holiday_sick_days
+    hours_per_day, days_per_week, weeks_per_year, holiday_sick_days,
+    asset_mgmt_fte_time_pct
 )
 
 # Asset discovery automation savings
@@ -2593,7 +2632,7 @@ for scenario_name, params in scenarios.items():
     )
 
 # --- Main App Layout ---
-st.title(f"Enhanced Business Value Assessment for {solution_name} Implementation")
+st.title(f"AIOPs Business Value Assessment for {solution_name} Implementation")
 st.markdown("This comprehensive tool provides detailed financial analysis with enhanced ROI calculations, calculation reasoning, and data quality validation.")
 
 # Display calculation health check in main area
@@ -3325,19 +3364,18 @@ with st.expander("📊 View Complete Configuration Summary"):
 st.markdown("---")
 col1, col2 = st.columns(2)
 with col1:
-    st.caption("**Enhanced Business Value Assessment Tool v2.2** - Now with Calculation Reasoning")
+    st.caption("**Enhanced Business Value Assessment Tool v2.3** - Now with FTE Time Allocation")
 with col2:
     st.caption(f"**Analysis generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
 # Pro tips
 st.info("💡 **Pro Tips:**")
 st.markdown("""
-- **🔍 Calculation Reasoning**: Use the new Data Quality Dashboard to understand exactly how your numbers are calculated
-- **🚨 Red Flags**: Watch for critical issues that indicate data problems - the tool will flag unrealistic calculations
-- **📊 Step-by-Step Breakdown**: See detailed calculation breakdowns to build confidence in your business case
-- **Company Logo**: Upload your logo in the sidebar to create professional PDF executive summaries
-- **Interactive Calculator**: Test different scenarios to understand sensitivity to key assumptions
-- **Export/Import**: Save configurations for future reference or stakeholder sharing
+- **NEW ✨ % of FTE Time**: Specify the percentage of time FTEs dedicate to a task for more accurate cost allocation.
+- **🔍 Calculation Reasoning**: Use the Data Quality Dashboard to understand exactly how your numbers are calculated.
+- **🚨 Red Flags**: The tool now validates if your workload exceeds the FTE time you've allocated.
+- **Company Logo**: Upload your logo in the sidebar to create professional PDF executive summaries.
+- **Export/Import**: Save configurations for future reference or stakeholder sharing.
 """)
 
-st.success("🎯 **Latest Enhancement**: This tool now includes advanced calculation reasoning and red flag detection to help you identify when customer data doesn't make sense, ensuring more accurate and credible business value assessments.")
+st.success("🎯 **Latest Enhancement**: This tool now includes inputs for FTE time allocation percentage, leading to more realistic cost calculations and smarter validation.")
