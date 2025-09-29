@@ -26,7 +26,7 @@ except ImportError:
     REPORT_DEPENDENCIES_AVAILABLE = False
 
 # Set page configuration
-st.set_page_config(page_title="Hybrid Cloud Operations BVA Tool", layout="wide")
+st.set_page_config(page_title="Autonomous IT Operations BVA Tool", layout="wide")
 
 # --- ENHANCED VALIDATION FUNCTIONS ---
 
