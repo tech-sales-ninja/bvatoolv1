@@ -2632,7 +2632,7 @@ for scenario_name, params in scenarios.items():
     )
 
 # --- Main App Layout ---
-st.title(f"Cloud IT Operations Business Value Assessment for {solution_name} Implementation")
+st.title(f"Autonomous IT Operations Business Value Assessment for {solution_name} Implementation")
 st.markdown("This comprehensive tool provides detailed financial analysis with enhanced ROI calculations, calculation reasoning, and data quality validation.")
 
 # Display calculation health check in main area
