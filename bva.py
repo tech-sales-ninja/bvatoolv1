@@ -26,7 +26,7 @@ except ImportError:
     REPORT_DEPENDENCIES_AVAILABLE = False
 
 # Set page configuration
-st.set_page_config(page_title="Enhanced Business Value Assessment Tool", layout="wide")
+st.set_page_config(page_title="Hybrid Cloud Operations BVA Tool", layout="wide")
 
 # --- ENHANCED VALIDATION FUNCTIONS ---
 
@@ -2632,7 +2632,7 @@ for scenario_name, params in scenarios.items():
     )
 
 # --- Main App Layout ---
-st.title(f"AIOPs Business Value Assessment for {solution_name} Implementation")
+st.title(f"Hybrid Cloud Operations Business Value Assessment for {solution_name} Implementation")
 st.markdown("This comprehensive tool provides detailed financial analysis with enhanced ROI calculations, calculation reasoning, and data quality validation.")
 
 # Display calculation health check in main area
